@@ -72,29 +72,21 @@ class GroundClutterFilter:
         Returns:
             np.ndarray: Total clutter power array.
         """
-        print(f"  _estimate_clutter_power_from_polyfit: i_series.shape = {i_series.shape}")
-        print(f"  _estimate_clutter_power_from_polyfit: q_series.shape = {q_series.shape}")
         t = np.arange(self.num_samples)
-        print(f"  _estimate_clutter_power_from_polyfit: t.shape = {t.shape}")
         i_series_T = i_series.T
         q_series_T = q_series.T
-        print(f"  _estimate_clutter_power_from_polyfit: i_series_T.shape = {i_series_T.shape}")
         coeffs_i = P.polyfit(t, i_series_T, order)
-        print(f"  _estimate_clutter_power_from_polyfit: coeffs_i.shape = {coeffs_i.shape}")
 
         clutter_i = P.polyval(t, coeffs_i)
-        print(f"  _estimate_clutter_power_from_polyfit: clutter_i.shape = {clutter_i.shape}")
 
         coeffs_q = P.polyfit(t, q_series_T, order)
         clutter_q = P.polyval(t, coeffs_q) # Same for Q component
-        print(f"  _estimate_clutter_power_from_polyfit: clutter_q.shape = {clutter_q.shape}")
 
         clutter_power_i = np.mean(clutter_i**2, axis=-1)
         clutter_power_q = np.mean(clutter_q**2, axis=-1)
-        print(f"  _estimate_clutter_power_from_polyfit: clutter_power_i.shape = {clutter_power_i.shape}")
 
         total_clutter_power = clutter_power_i + clutter_power_q
-        print(f"  _estimate_clutter_power_from_polyfit: total_clutter_power.shape = {total_clutter_power.shape}")
+
         return total_clutter_power
 
     def _get_polynomial_order(self, cnr_db, b_factor=1.0):
@@ -153,9 +145,6 @@ class GroundClutterFilter:
             coeffs = P.polyfit(t, series_T, order)
 
             clutter_trend = P.polyval(t, coeffs)
-
-            print(f"  _perform_regression_filter: selected_series.shape = {selected_series.shape}")
-            print(f"  _perform_regression_filter: clutter_trend.shape = {clutter_trend.shape}")
 
             filtered_series = selected_series - clutter_trend
 
@@ -252,28 +241,6 @@ class GroundClutterFilter:
                     break
         return interpolated_spectrum_batch
 
-    # def _get_interpolation_width_L(self, poly_order):
-    #     """
-    #     Determines the interpolation half-width L based on polynomial order.
-    #     This is a simplified lookup based on Table B1.
-    #     In a real application, this would be derived from the filter's
-    #     frequency response.
-
-    #     Args:
-    #         poly_order (int): The polynomial order used for filtering.
-
-    #     Returns:
-    #         int: The half-width L for interpolation.
-    #     """
-    #     if poly_order <= 3: return 1
-    #     elif poly_order <= 5: return 2
-    #     elif poly_order <= 8: return 3
-    #     elif poly_order <= 10: return 4
-    #     elif poly_order <= 13: return 5
-    #     elif poly_order <= 16: return 6
-    #     elif poly_order <= 19: return 7
-    #     else: return 8
-
     def _get_interpolation_width_L(self, poly_order):
         """
         Determines the interpolation half-width L based on polynomial order.
@@ -345,8 +312,6 @@ class GroundClutterFilter:
         i_data_flat = i_data.reshape(num_cells, num_samples)
         q_data_flat = q_data.reshape(num_cells, num_samples)
 
-        print(f"Processing {num_cells} cells ({num_ranges} range gates, {num_azimuths} azimuthal positions)...")
-
         filtered_i_flat = np.zeros_like(i_data_flat, dtype=float)
         filtered_q_flat = np.zeros_like(q_data_flat, dtype=float)
         poly_order_flat = np.zeros(num_cells, dtype=int)
@@ -355,7 +320,6 @@ class GroundClutterFilter:
         interpolated_spectrum_flat = np.zeros_like(i_data_flat, dtype=float)
 
         if cnr_db_map is None:
-            print("Estimating CNR for all cells...")
             clutter_power_linear_flat = self._estimate_clutter_power_from_polyfit(i_data_flat, q_data_flat)
             total_raw_power_flat = np.mean(i_data_flat**2 + q_data_flat**2, axis=-1)
             noise_power_linear_flat = np.maximum(1e-10, total_raw_power_flat * 0.1)
@@ -365,17 +329,15 @@ class GroundClutterFilter:
                                    -99.0)
         else:
             cnr_db_flat = cnr_db_map.flatten()
-
-        print("Determining polynomial orders...")
+        
+        # b_factor
         poly_order_flat = self._get_polynomial_order(cnr_db_flat, b_factor=b_factor)
         
-        print("Performing regression filtering on I series...")
+        print("Performing regression filtering")
         filtered_i_flat, clutter_i_trend_flat = self._perform_regression_filter(i_data_flat, poly_order_flat)
-        print("Performing regression filtering on Q series...")
         filtered_q_flat, clutter_q_trend_flat = self._perform_regression_filter(q_data_flat, poly_order_flat)
 
         if apply_interpolation:
-            print("Applying Gaussian interpolation (if conditions met)...")
             complex_signal_flat = filtered_i_flat + 1j * filtered_q_flat
 
             doppler_spectrum_flat = np.abs(np.fft.fftshift(np.fft.fft(complex_signal_flat, axis=-1), axes=-1))**2
