@@ -1,12 +1,12 @@
 # --------------------------------------------------
-# Name: clutter_removal.py
+# Name: proq_iq.py
 # Author: J.W. Thiesing and Robby M. Frost
 # Advanced Radar Research Center
 # University of Oklahoma
 # Created: 23 Oct 2025
 # Purpose: Adapted code from Vitor Goede, 
 # --------------------------------------------------
-from grf_functions import *
+from iq_utils import *
 import numpy as np
 import glob, os
 import warnings
@@ -15,11 +15,11 @@ warnings.filterwarnings("ignore")
 # parameters
 
 # project directory
-dproj = "/data/arrcwx/raxpol/20250518/"
+dproj = "/data/arrcwx/raxpol/20250605/D1/"
 # directory holding IQ data
 diq = f"{dproj}iq/"
 # directory to output moment data
-dmom = f"{dproj}D2/reproc/"
+dmom = f"{dproj}moment/reproc/"
 
 # lore accurate speed of light
 c = 299792458
@@ -42,16 +42,16 @@ else:
 files = sorted(glob.glob(f"{diq}RAXPOL*.rkc"))
 
 # loop over files
-for jt in range(17,18):
+for jt in range(0,len(files)):
     # time string
     tstring = os.path.basename(files[jt])[7:-8]
-    print(f"\nStarting on {tstring}...\n")
+    print(f"-----------------Starting on {tstring}-----------------\n")
     # read in rkc file
     rkid = rkcfile(files[jt], verbose=False)
     
     # waveform
     wf = rkid.header['config']['waveformName']
-    print(wf)
+    print(f"Waveform: {wf}\n")
     if wf[0] == 'h':
         grf = False
     if wf[0] == 's':
@@ -59,8 +59,6 @@ for jt in range(17,18):
     
     # pulse width [s]
     pw = rkid.header['config']['pw']
-    # gate size
-    dr = (c * pw) / 2
 
     # --------------------------------------------------
     # detect sweep boundaries via cumulative azimuth rotation
@@ -100,6 +98,8 @@ for jt in range(17,18):
         # sample
         sample_freq = int(rkid.header['waveform']['fs'])
         sample_time = 1/sample_freq
+        # gate size
+        dr = 30.
         # nyquist velocity
         va = lamb/(4*prt)
 
@@ -108,13 +108,13 @@ for jt in range(17,18):
         # rays per sweeps
         local_rotation = total_rotation[pidx] - total_rotation[pidx[0]]
         nray = int(local_rotation[-1] / des_az)
+        if nray == 0:
+            print(f"Skipping {tstring}, not enough pulses\n\n\n")
+            continue
         # number of range gates
         ngate = pulses.shape[0]
         # pulses per ray
         ppr = npulse // nray
-        if ppr == 0:
-            print(f"Skipping {tstring}, not enough pulses\n")
-            continue
         # total number of pulses
         n = nray * ppr
 
@@ -137,8 +137,9 @@ for jt in range(17,18):
         X_v = np.reshape(X_v, (ngate, nray, ppr)) # shape (gate, ray, pulse)
 
         # reshape azimuths
-        az = np.reshape(az[:n], (nray, ppr))
-        az = az[:,0]
+        az = np.reshape(az[:n], (nray,ppr))
+        az_rad = np.deg2rad(az)
+        az = np.rad2deg(np.arctan2(np.nanmean(np.sin(az_rad), axis=1), np.nanmean(np.cos(az_rad), axis=1))) % 360
         # reshape elevations
         el = np.reshape(el[:n], (nray, ppr))
         el = np.nanmean(el, axis=1)
@@ -149,6 +150,7 @@ for jt in range(17,18):
         dtime = np.reshape(dtime[:n], (nray, ppr))
         dtime = dtime[:,0]
         tstring = np.array([t.strftime('%Y%m%d_%H%M%S') for t in dtime.astype('datetime64[us]').tolist()])[0]
+
         # --------------------------------------------------
         # perform GRF if desired
 
@@ -213,7 +215,7 @@ for jt in range(17,18):
             if os.path.exists(dout):
                 os.remove(dout)
             ds.to_netcdf(dout, auto_complex=True)
-            print(f"Output filtered I/Q to: {dout}")
+            print(f"Output filtered I/Q to: {dout}\n")
         # --------------------------------------------------
         # get moments
         print("Getting moment data...")
@@ -254,7 +256,7 @@ for jt in range(17,18):
         rcf.setRange(R.astype(np.float32))
         rcf.setPosition(np.nanmean(rkid.header['desc']['latitude']), np.nanmean(rkid.header['desc']['longitude']))
         rcf.setScanningStrategy('ppi')
-        rcf.setTargetAngle(np.nanmean(rkid.pulses['elevationDegrees']))
+        rcf.setTargetAngle(np.nanmean(rkid.pulses['elevationDegrees'][pidx]))
         rcf.setAzimuth(az)
         rcf.setElevation(el)
         rcf.setPulseWidthSeconds((rkid.pulses['pulseWidthSampleCount'][:n:ppr]*sample_time).astype(np.float32))
@@ -275,4 +277,4 @@ for jt in range(17,18):
         if os.path.exists(dout):
             os.remove(dout)
         rcf.saveToFile(dout)
-        print(f"Done with: {tstring}!!!\n\n\n")
+        print(f"-----------------Done with: {tstring}!!!-----------------\n\n\n")

@@ -54,11 +54,11 @@ class GroundClutterFilter:
         self.nyquist_velocity = self.wavelength / (4 * self.prt)
 
         print(f"Filter initialized with:")
-        print(f"  Wavelength: {self.wavelength:.4f} m")
-        print(f"  Scan Rate: {self.scan_rate} deg/s")
-        print(f"  PRT: {self.prt} s")
-        print(f"  Number of Samples per gate: {self.num_samples}")
-        print(f"  Nyquist Velocity: {self.nyquist_velocity:.2f} m/s")
+        print(f"-- Wavelength: {self.wavelength:.4f} m")
+        print(f"-- Scan Rate: {self.scan_rate} deg/s")
+        print(f"-- PRT: {self.prt} s")
+        print(f"-- Number of Samples per gate: {self.num_samples}")
+        print(f"-- Nyquist Velocity: {self.nyquist_velocity:.2f} m/s\n")
 
     def _estimate_clutter_power_from_polyfit(self, i_series, q_series, order=2):
         """
@@ -333,7 +333,6 @@ class GroundClutterFilter:
         # b_factor
         poly_order_flat = self._get_polynomial_order(cnr_db_flat, b_factor=b_factor)
         
-        print("Performing regression filtering")
         filtered_i_flat, clutter_i_trend_flat = self._perform_regression_filter(i_data_flat, poly_order_flat)
         filtered_q_flat, clutter_q_trend_flat = self._perform_regression_filter(q_data_flat, poly_order_flat)
 
